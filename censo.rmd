@@ -1,0 +1,161 @@
+---
+title: "Exercício: Demografia Brasil"
+author: " Alexandre Adalardo"
+date: "`r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  rmdformats::html_clean:
+    highlight: kate
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+  pdf_document:
+    highlight: tango
+    toc: yes
+---
+
+
+
+```{r setup, echo=FALSE, warning=FALSE, message=FALSE}
+library(knitr)
+library(ggplot2)
+opts_chunk$set(fig.align = 'center', warning = FALSE, message = FALSE, error = FALSE)
+options(formatR.arrow = TRUE, width = 90, help_type = "html")
+```
+
+# Dados e modelos
+
+Os dados base utilizados nesse exercício são censos demográficos do IBGE. Mais informações em: [IBGE](http://www.ibge.gov.br/home/default.php). 
+
+Os modelos que iremos utilizar nesse exercício são:
+
+* modelo crescimento denso-independente discreto:
+
+$$ N_t = N_0 \lambda ^ t $$
+
+* modelo crescimento denso-independente contínuo:
+
+$$ N_t = N_0 e^{rt} $$
+
+E a transformação entre eles:
+
+$$ r = ln(\lambda) $$ 
+$$ \lambda = exp(r)$$
+
+## Dados dos censos demográficos década: 1990- 2000
+
+```{r echo=FALSE, eval = TRUE}
+ibge <- read.table("ibge40_96", header=TRUE, as.is=TRUE, sep="\t")
+censo90 <- ibge[6:8,]
+rownames(censo90) <- NULL
+write.table(censo90, file = "censo90.csv", row.names = FALSE)
+
+```
+
+* Baixe o arquivo de dados de censos demográficos da década de 1990: [censo90](censo90.csv)
+* Abra o arquivo em uma planilha eletrônica (formato original csv)
+
+```{r echo = TRUE, eval = TRUE}
+
+censo90
+
+```
+### Variáveis
+
+Os dados estão estratificados por gênero (Homens, Mulheres) e por local de residência (Urbano ou Rural). Para esse exercício só utilizaremos os dados de Homens e Mulheres (colunas 2 e 3) somados e representando o tamanho total da população. O primeiro passo é, portanto, calcular esse valor.
+
+
+## Atividades
+### Para a população total, calcule:
+
+* taxas de crescimentos entre os censos;
+* taxa de crescimento anual entre censos;
+* projete o crescimento populacional para o ano de 2010 a partir da taxa média anual de todos os censos.
+
+```{r echo=FALSE, eval = TRUE}
+
+pop <- data.frame(ano = censo90$Anos, populacao =  apply(censo90[,2:3], 1,sum))
+lamb <- pop$pop[2:3]/pop$pop[1:2]
+int <- diff(pop$ano)
+crescAno <- (log(lamb)/int)
+lambAno <- exp(crescAno)
+lambTot <- pop$pop[3]/pop$pop[1]
+rAno <- log(lambTot)/(pop$ano[3] - pop$ano[1])
+N2010 <- pop$pop[3]* exp(rAno*10)
+##  ou
+lambMedAno <- exp(rAno)
+lN2019 <-  pop$pop[3]* lambMedAno^10
+
+
+```
+
+## Estimativas por extrapolações
+Compare sua estimativa com os dados do censo IBGE 2010 abaixo.
+
+```{r echo=FALSE, eval = TRUE}
+N2010 <- sum(ibge[9, 2:3])
+N2010
+```
+Discuta com os colegas da bancada (trios) as possíveis fontes da diferença entre a estimativa do modelo e os dados do censo 2010, baseado nos pressupostos que estruturam o modelo. Anotem as explicações que o grupo julga plausíveis.
+
+## Série de dados temporais
+
+Vamos agora usar os dados de uma série temporal mais longa e ver como as taxas de crescimento anual estão se comportando ao longo do tempo.
+
+```{r echo = FALSE, eval = TRUE}
+cDecada <- ibge[-c(1,7),]
+rownames(cDecada) <- NULL
+write.table(cDecada, file = "censoDecadas.csv", row.names=FALSE)
+cDecada
+
+```
+* Baixe o arquivo de dados dos censos demográficos da década de 1950 a 2010: [censoDecadas](censoDecadas.csv)
+
+
+### Atividade
+
+* Calcule as taxas de crescimento para cada intervalo de censo;
+* calcule as taxas anuais instantâneas para cada intervalo;
+* faça um gráfico das taxas anuais ao longo das décadas
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+
+popall <- data.frame(ano = ibge0$Anos, populacao = apply(ibge0[,2:3], 1, sum))
+diffano <- diff(popall$ano)
+lamball <- popall$pop[-1]/popall$pop[-(nrow(popall))]
+rall <- log(lamball)/diffano
+plot(rall ~ popall$ano[-1])
+decada <- popall$ano[-1]
+lm0 <- lm(rall ~ decada + I(decada^2))
+lm0coef <- coef(lm0)
+rdec <- data.frame(rano = rall, decada = decada)
+#curve(lm0coef[1] + x*lm0coef[2] + (x^2) * lm0coef[3], add=TRUE, col="red"  )
+prd <-  data.frame(decada = seq(1960, 2010, len=200))
+err <- predict(lm0, newdata = prd, se.fit = TRUE)
+prd$lci <- err$fit - 1.96 * err$se.fit
+prd$fit <- err$fit
+prd$uci <- err$fit + 1.96 * err$se.fit
+
+gg01 <- ggplot(prd, aes(x=decada, y = fit)) +
+    theme_bw() +
+    geom_line() +
+    ylab("Crescimento instantâneo anual per capita") +
+    xlab("Decada") +
+    geom_smooth(aes(ymin = lci, ymax = uci), stat = "identity") + 
+    geom_point(data = rdec , aes(x = decada, y = rano), size = 2, col= "coral2")
+
+gg01
+
+```
+
+## Fechamento
+
+Discuta com os colegas de bancada (trios) como poderíamos modelar a demografia da população brasileira para incorporar o(s) problema(as) diagnosticado(os) e fazer previsões mais plausíveis. Anote uma proposta para ser discutida com a turma.
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+library(rmarkdown)
+render("censo.rmd")
+
+```
